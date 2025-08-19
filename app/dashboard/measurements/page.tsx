@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,17 +11,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Scale, Ruler, Activity, TrendingUp, Plus } from 'lucide-react';
-import { MeasurementFormData, WeightMeasurement, BodyMeasurement } from '@/types';
+import { CalendarDays, Scale, Ruler, Activity, TrendingUp, Plus, Loader2 } from 'lucide-react';
+import { bodyMeasurementsSchema, BodyMeasurementsFormData } from '@/lib/validations/measurements';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import BodyMap from '@/components/BodyMap';
+import { toast } from 'sonner';
+import { z } from 'zod';
 
-// Tipo combinado para la página de medidas
-type CombinedMeasurement = {
+// Types
+type BodyMeasurement = {
   id: string;
   user_id: string;
-  weight: number;
-  height?: number;
   date: string;
+  weight?: number;
+  height?: number;
   chest?: number;
   waist?: number;
   hips?: number;
@@ -31,76 +38,106 @@ type CombinedMeasurement = {
   created_at: string;
   updated_at: string;
 };
-import { toast } from 'sonner';
 
-type ExtendedMeasurementFormData = {
-  weight: string;
-  height?: string;
-  chest: string;
-  waist: string;
-  hips: string;
-  biceps: string;
-  thighs: string;
-  neck: string;
-  bodyFatPercentage?: string;
-  muscleMass?: string;
-  notes: string;
+type MeasurementFormData = BodyMeasurementsFormData;
+
+// Query keys
+const measurementKeys = {
+  all: ['measurements'] as const,
+  lists: () => [...measurementKeys.all, 'list'] as const,
+  list: (userId: string) => [...measurementKeys.lists(), userId] as const,
 };
 
 export default function MeasurementsPage() {
-  const [formData, setFormData] = useState<ExtendedMeasurementFormData>({
-    weight: '',
-    height: '',
-    chest: '',
-    waist: '',
-    hips: '',
-    biceps: '',
-    thighs: '',
-    neck: '',
-    bodyFatPercentage: '',
-    muscleMass: '',
-    notes: ''
-  });
-
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const [measurements, setMeasurements] = useState<CombinedMeasurement[]>([
-    {
-      id: '1',
-      user_id: 'mock-user-id',
-      weight: 75.5,
-      date: '2024-01-15',
-      created_at: '2024-01-15T10:00:00Z',
-      updated_at: '2024-01-15T10:00:00Z',
-      chest: 95,
-      waist: 80,
-      hips: 98,
-      biceps: 35,
-      thighs: 58,
-      neck: 38,
-      body_fat_percentage: 15.2,
-      muscle_mass: 63.8,
-      notes: 'Medición después del entrenamiento matutino'
+  // React Hook Form with Zod validation
+  const form = useForm<MeasurementFormData>({
+    resolver: zodResolver(bodyMeasurementsSchema),
+    defaultValues: {
+      weight: undefined,
+      height: undefined,
+      chest: undefined,
+      waist: undefined,
+      hips: undefined,
+      leftArm: undefined,
+      rightArm: undefined,
+      leftThigh: undefined,
+      rightThigh: undefined,
+      neck: undefined,
+      bodyFat: undefined,
+      muscleMass: undefined,
+      measurementDate: new Date().toISOString().split('T')[0],
+      notes: '',
     },
-    {
-      id: '2',
-      user_id: 'mock-user-id',
-      weight: 74.8,
-      date: '2024-01-08',
-      created_at: '2024-01-08T10:00:00Z',
-      updated_at: '2024-01-08T10:00:00Z',
-      chest: 94,
-      waist: 81,
-      hips: 97,
-      biceps: 34.5,
-      thighs: 57.5,
-      neck: 37.5,
-      body_fat_percentage: 15.8,
-      muscle_mass: 63.2,
-      notes: 'Primera medición del mes'
-    }
-  ]);
+  });
 
+  // Fetch measurements
+  const { data: measurements = [], isLoading } = useQuery({
+    queryKey: measurementKeys.list(user?.id || ''),
+    queryFn: async () => {
+      if (!user?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('body_measurements')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      return data as BodyMeasurement[];
+    },
+    enabled: !!user?.id,
+  });
+
+  // Create measurement mutation
+  const createMeasurementMutation = useMutation({
+    mutationFn: async (data: MeasurementFormData) => {
+      if (!user?.id) throw new Error('Usuario no autenticado');
+      
+      const measurementData = {
+        user_id: user.id,
+        date: data.measurementDate,
+        weight: data.weight,
+        height: data.height,
+        measurements: {
+          chest: data.chest,
+          waist: data.waist,
+          hips: data.hips,
+          leftArm: data.leftArm,
+          rightArm: data.rightArm,
+          leftThigh: data.leftThigh,
+          rightThigh: data.rightThigh,
+          neck: data.neck,
+        },
+        body_fat_percentage: data.bodyFat,
+        muscle_mass: data.muscleMass,
+        notes: data.notes,
+      };
+      
+      const { data: result, error } = await supabase
+        .from('body_measurements')
+        .insert([measurementData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: measurementKeys.list(user?.id || '') });
+      form.reset();
+      toast.success('Medidas registradas correctamente');
+    },
+    onError: (error) => {
+      console.error('Error creating measurement:', error);
+      toast.error('Error al guardar las medidas');
+    },
+  });
+
+  // Helper functions
   const calculateBMI = (weight: number, height: number): number => {
     if (!weight || !height) return 0;
     return Number((weight / Math.pow(height / 100, 2)).toFixed(1));
@@ -111,13 +148,6 @@ export default function MeasurementsPage() {
     if (bmi < 25) return { category: 'Normal', color: 'text-green-600' };
     if (bmi < 30) return { category: 'Sobrepeso', color: 'text-yellow-600' };
     return { category: 'Obesidad', color: 'text-red-600' };
-  };
-
-  const handleInputChange = (field: keyof ExtendedMeasurementFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
   };
 
   const handleZoneClick = (fieldId: string) => {
@@ -138,55 +168,14 @@ export default function MeasurementsPage() {
     setFocusedField(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validación básica
-    if (!formData.weight) {
-      toast.error('El peso es obligatorio');
-      return;
-    }
-
-    const newMeasurement: CombinedMeasurement = {
-      id: Date.now().toString(),
-      user_id: 'mock-user-id',
-      weight: parseFloat(formData.weight),
-      date: new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      chest: formData.chest ? parseFloat(formData.chest) : undefined,
-      waist: formData.waist ? parseFloat(formData.waist) : undefined,
-      hips: formData.hips ? parseFloat(formData.hips) : undefined,
-      biceps: formData.biceps ? parseFloat(formData.biceps) : undefined,
-      thighs: formData.thighs ? parseFloat(formData.thighs) : undefined,
-      neck: formData.neck ? parseFloat(formData.neck) : undefined,
-      body_fat_percentage: formData.bodyFatPercentage ? parseFloat(formData.bodyFatPercentage) : undefined,
-      muscle_mass: formData.muscleMass ? parseFloat(formData.muscleMass) : undefined,
-      notes: formData.notes
-    };
-
-    setMeasurements(prev => [newMeasurement, ...prev]);
-    
-    // Limpiar formulario
-    setFormData({
-      weight: '',
-      chest: '',
-      waist: '',
-      hips: '',
-      biceps: '',
-      thighs: '',
-      neck: '',
-      height: undefined,
-      bodyFatPercentage: undefined,
-      muscleMass: undefined,
-      notes: ''
-    });
-
-    toast.success('Medidas registradas correctamente');
+  const onSubmit = (data: MeasurementFormData) => {
+    createMeasurementMutation.mutate(data);
   };
 
-  const currentBMI = formData.weight && formData.height 
-    ? calculateBMI(parseFloat(formData.weight), parseFloat(formData.height))
+  const watchedWeight = form.watch('weight');
+  const watchedHeight = form.watch('height');
+  const currentBMI = watchedWeight && watchedHeight 
+    ? calculateBMI(watchedWeight, watchedHeight)
     : 0;
   
   const bmiInfo = getBMICategory(currentBMI);
@@ -202,7 +191,11 @@ export default function MeasurementsPage() {
         </div>
         <Badge variant="outline" className="flex items-center gap-2">
           <Activity className="h-4 w-4" />
-          {measurements.length} registros
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            `${measurements.length} registros`
+          )}
         </Badge>
       </div>
 
@@ -230,20 +223,32 @@ export default function MeasurementsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 {/* Datos básicos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="weight">Peso (kg) *</Label>
+                    <Label htmlFor="measurementDate">Fecha de Medición</Label>
+                    <Input
+                      id="measurementDate"
+                      type="date"
+                      {...form.register('measurementDate')}
+                    />
+                    {form.formState.errors.measurementDate && (
+                      <p className="text-sm text-red-500">{form.formState.errors.measurementDate.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="weight">Peso (kg)</Label>
                     <Input
                       id="weight"
                       type="number"
                       step="0.1"
                       placeholder="75.5"
-                      value={formData.weight}
-                      onChange={(e) => handleInputChange('weight', e.target.value)}
-                      required
+                      {...form.register('weight', { valueAsNumber: true })}
                     />
+                    {form.formState.errors.weight && (
+                      <p className="text-sm text-red-500">{form.formState.errors.weight.message}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="height">Altura (cm)</Label>
@@ -251,9 +256,11 @@ export default function MeasurementsPage() {
                       id="height"
                       type="number"
                       placeholder="175"
-                      value={formData.height || ''}
-                      onChange={(e) => handleInputChange('height', e.target.value)}
+                      {...form.register('height', { valueAsNumber: true })}
                     />
+                    {form.formState.errors.height && (
+                      <p className="text-sm text-red-500">{form.formState.errors.height.message}</p>
+                    )}
                   </div>
                 </div>
 
@@ -300,11 +307,13 @@ export default function MeasurementsPage() {
                             type="number"
                             step="0.1"
                             placeholder="95.0"
-                            value={formData.chest}
-                            onChange={(e) => handleInputChange('chest', e.target.value)}
+                            {...form.register('chest', { valueAsNumber: true })}
                             onFocus={() => handleFieldFocus('chest')}
                             onBlur={handleFieldBlur}
                           />
+                          {form.formState.errors.chest && (
+                            <p className="text-sm text-red-500">{form.formState.errors.chest.message}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="waist">Cintura</Label>
@@ -313,11 +322,13 @@ export default function MeasurementsPage() {
                             type="number"
                             step="0.1"
                             placeholder="80.0"
-                            value={formData.waist}
-                            onChange={(e) => handleInputChange('waist', e.target.value)}
+                            {...form.register('waist', { valueAsNumber: true })}
                             onFocus={() => handleFieldFocus('waist')}
                             onBlur={handleFieldBlur}
                           />
+                          {form.formState.errors.waist && (
+                            <p className="text-sm text-red-500">{form.formState.errors.waist.message}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="hips">Caderas</Label>
@@ -326,37 +337,73 @@ export default function MeasurementsPage() {
                             type="number"
                             step="0.1"
                             placeholder="98.0"
-                            value={formData.hips}
-                            onChange={(e) => handleInputChange('hips', e.target.value)}
+                            {...form.register('hips', { valueAsNumber: true })}
                             onFocus={() => handleFieldFocus('hips')}
                             onBlur={handleFieldBlur}
                           />
+                          {form.formState.errors.hips && (
+                            <p className="text-sm text-red-500">{form.formState.errors.hips.message}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="biceps">Bíceps</Label>
+                          <Label htmlFor="leftArm">Brazo Izquierdo</Label>
                           <Input
-                            id="biceps"
+                            id="leftArm"
                             type="number"
                             step="0.1"
                             placeholder="35.0"
-                            value={formData.biceps}
-                            onChange={(e) => handleInputChange('biceps', e.target.value)}
-                            onFocus={() => handleFieldFocus('biceps')}
+                            {...form.register('leftArm', { valueAsNumber: true })}
+                            onFocus={() => handleFieldFocus('leftArm')}
                             onBlur={handleFieldBlur}
                           />
+                          {form.formState.errors.leftArm && (
+                            <p className="text-sm text-red-500">{form.formState.errors.leftArm.message}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="thighs">Muslos</Label>
+                          <Label htmlFor="rightArm">Brazo Derecho</Label>
                           <Input
-                            id="thighs"
+                            id="rightArm"
+                            type="number"
+                            step="0.1"
+                            placeholder="35.0"
+                            {...form.register('rightArm', { valueAsNumber: true })}
+                            onFocus={() => handleFieldFocus('rightArm')}
+                            onBlur={handleFieldBlur}
+                          />
+                          {form.formState.errors.rightArm && (
+                            <p className="text-sm text-red-500">{form.formState.errors.rightArm.message}</p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="leftThigh">Muslo Izquierdo</Label>
+                          <Input
+                            id="leftThigh"
                             type="number"
                             step="0.1"
                             placeholder="58.0"
-                            value={formData.thighs}
-                            onChange={(e) => handleInputChange('thighs', e.target.value)}
-                            onFocus={() => handleFieldFocus('thighs')}
+                            {...form.register('leftThigh', { valueAsNumber: true })}
+                            onFocus={() => handleFieldFocus('leftThigh')}
                             onBlur={handleFieldBlur}
                           />
+                          {form.formState.errors.leftThigh && (
+                            <p className="text-sm text-red-500">{form.formState.errors.leftThigh.message}</p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rightThigh">Muslo Derecho</Label>
+                          <Input
+                            id="rightThigh"
+                            type="number"
+                            step="0.1"
+                            placeholder="58.0"
+                            {...form.register('rightThigh', { valueAsNumber: true })}
+                            onFocus={() => handleFieldFocus('rightThigh')}
+                            onBlur={handleFieldBlur}
+                          />
+                          {form.formState.errors.rightThigh && (
+                            <p className="text-sm text-red-500">{form.formState.errors.rightThigh.message}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="neck">Cuello</Label>
@@ -365,11 +412,13 @@ export default function MeasurementsPage() {
                             type="number"
                             step="0.1"
                             placeholder="38.0"
-                            value={formData.neck}
-                            onChange={(e) => handleInputChange('neck', e.target.value)}
+                            {...form.register('neck', { valueAsNumber: true })}
                             onFocus={() => handleFieldFocus('neck')}
                             onBlur={handleFieldBlur}
                           />
+                          {form.formState.errors.neck && (
+                            <p className="text-sm text-red-500">{form.formState.errors.neck.message}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -390,9 +439,11 @@ export default function MeasurementsPage() {
                         type="number"
                         step="0.1"
                         placeholder="15.2"
-                        value={formData.bodyFatPercentage || ''}
-                        onChange={(e) => handleInputChange('bodyFatPercentage', e.target.value)}
+                        {...form.register('bodyFat', { valueAsNumber: true })}
                       />
+                      {form.formState.errors.bodyFat && (
+                        <p className="text-sm text-red-500">{form.formState.errors.bodyFat.message}</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="muscleMass">Masa Muscular (kg)</Label>
@@ -401,9 +452,11 @@ export default function MeasurementsPage() {
                         type="number"
                         step="0.1"
                         placeholder="63.8"
-                        value={formData.muscleMass || ''}
-                        onChange={(e) => handleInputChange('muscleMass', e.target.value)}
+                        {...form.register('muscleMass', { valueAsNumber: true })}
                       />
+                      {form.formState.errors.muscleMass && (
+                        <p className="text-sm text-red-500">{form.formState.errors.muscleMass.message}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -414,10 +467,12 @@ export default function MeasurementsPage() {
                   <Textarea
                     id="notes"
                     placeholder="Agrega cualquier observación relevante..."
-                    value={formData.notes}
-                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                    {...form.register('notes')}
                     rows={3}
                   />
+                  {form.formState.errors.notes && (
+                    <p className="text-sm text-red-500">{form.formState.errors.notes.message}</p>
+                  )}
                 </div>
 
                 <Button type="submit" className="w-full">
@@ -431,7 +486,7 @@ export default function MeasurementsPage() {
         <TabsContent value="historial" className="space-y-6">
           <div className="grid gap-4">
             {measurements.map((measurement) => {
-              const measurementBMI = measurement.height 
+              const measurementBMI = measurement.height && measurement.weight
                 ? calculateBMI(measurement.weight, measurement.height)
                 : 0;
               

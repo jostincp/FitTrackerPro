@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,85 +13,89 @@ import { CalendarDays, Scale, TrendingUp, TrendingDown, Minus, ArrowLeft } from 
 import { WeightMeasurement } from '@/types';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase/client';
+import { weightMeasurementSchema, WeightMeasurementFormData } from '@/lib/validations/auth';
 
-interface WeightFormData {
-  weight: string;
-  notes: string;
-}
+// Weight query keys
+const weightKeys = {
+  all: ['weight'] as const,
+  lists: () => [...weightKeys.all, 'list'] as const,
+  list: (userId: string) => [...weightKeys.lists(), userId] as const,
+};
 
 export default function WeightPage() {
-  const [formData, setFormData] = useState<WeightFormData>({
-    weight: '',
-    notes: ''
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Form setup with React Hook Form and Zod validation
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<WeightMeasurementFormData>({
+    resolver: zodResolver(weightMeasurementSchema),
+    defaultValues: {
+      weight: '',
+      notes: '',
+    },
   });
 
-  const [weightHistory, setWeightHistory] = useState<WeightMeasurement[]>([
-    {
-      id: '1',
-      user_id: 'mock-user-id',
-      weight: 75.5,
-      date: '2024-01-15',
-      created_at: '2024-01-15T10:00:00Z',
-
+  // Fetch weight history
+  const { data: weightHistory = [], isLoading } = useQuery({
+    queryKey: weightKeys.list(user?.id || ''),
+    queryFn: async () => {
+      if (!user?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('weight_measurements')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      return data as WeightMeasurement[];
     },
-    {
-      id: '2',
-      user_id: 'mock-user-id',
-      weight: 74.8,
-      date: '2024-01-08',
-      created_at: '2024-01-08T10:00:00Z',
+    enabled: !!user?.id,
+  });
 
+  // Create weight measurement mutation
+  const createWeightMutation = useMutation({
+    mutationFn: async (data: WeightMeasurementFormData) => {
+      if (!user?.id) throw new Error('Usuario no autenticado');
+      
+      const weightValue = parseFloat(data.weight);
+      const measurementData = {
+        user_id: user.id,
+        weight: weightValue,
+        date: new Date().toISOString().split('T')[0],
+        notes: data.notes || null,
+      };
+      
+      const { data: result, error } = await supabase
+        .from('weight_measurements')
+        .insert([measurementData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
     },
-    {
-      id: '3',
-      user_id: 'mock-user-id',
-      weight: 75.2,
-      date: '2024-01-01',
-      created_at: '2024-01-01T10:00:00Z',
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: weightKeys.list(user?.id || '') });
+      reset();
+      toast.success('Peso registrado correctamente');
+    },
+    onError: (error) => {
+      console.error('Error creating weight measurement:', error);
+      toast.error('Error al registrar el peso');
+    },
+  });
 
-    }
-  ]);
-
-  const handleInputChange = (field: keyof WeightFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.weight) {
-      toast.error('El peso es obligatorio');
-      return;
-    }
-
-    const weight = parseFloat(formData.weight);
-    if (weight <= 0 || weight > 500) {
-      toast.error('Por favor ingresa un peso válido');
-      return;
-    }
-
-    const newWeight: WeightMeasurement = {
-      id: Date.now().toString(),
-      user_id: 'mock-user-id',
-      weight,
-      date: new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString(),
-
-      notes: formData.notes || undefined
-    };
-
-    setWeightHistory(prev => [newWeight, ...prev]);
-    
-    // Limpiar formulario
-    setFormData({
-      weight: '',
-      notes: ''
-    });
-
-    toast.success('Peso registrado correctamente');
+  const onSubmit = (data: WeightMeasurementFormData) => {
+    createWeightMutation.mutate(data);
   };
 
   const getWeightTrend = () => {
@@ -210,7 +216,7 @@ export default function WeightPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="weight">Peso (kg) *</Label>
                 <Input
@@ -220,11 +226,12 @@ export default function WeightPage() {
                   min="1"
                   max="500"
                   placeholder="75.5"
-                  value={formData.weight}
-                  onChange={(e) => handleInputChange('weight', e.target.value)}
-                  required
+                  {...register('weight')}
                   className="text-lg"
                 />
+                {errors.weight && (
+                  <p className="text-sm text-red-600">{errors.weight.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -232,14 +239,20 @@ export default function WeightPage() {
                 <Textarea
                   id="notes"
                   placeholder="Ej: Medición en ayunas, después del entrenamiento..."
-                  value={formData.notes}
-                  onChange={(e) => handleInputChange('notes', e.target.value)}
+                  {...register('notes')}
                   rows={3}
                 />
+                {errors.notes && (
+                  <p className="text-sm text-red-600">{errors.notes.message}</p>
+                )}
               </div>
 
-              <Button type="submit" className="w-full">
-                Registrar Peso
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isSubmitting || createWeightMutation.isPending}
+              >
+                {isSubmitting || createWeightMutation.isPending ? 'Registrando...' : 'Registrar Peso'}
               </Button>
             </form>
           </CardContent>
@@ -257,8 +270,13 @@ export default function WeightPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {weightHistory.slice(0, 5).map((record, index) => {
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {weightHistory.slice(0, 5).map((record, index) => {
                 const isLatest = index === 0;
                 const previousWeight = index < weightHistory.length - 1 ? weightHistory[index + 1].weight : null;
                 const difference = previousWeight ? record.weight - previousWeight : null;
@@ -301,14 +319,15 @@ export default function WeightPage() {
                 );
               })}
               
-              {weightHistory.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Scale className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No hay registros de peso aún</p>
-                  <p className="text-sm">Comienza registrando tu peso actual</p>
-                </div>
-              )}
-            </div>
+                {weightHistory.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Scale className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No hay registros de peso aún</p>
+                    <p className="text-sm">Comienza registrando tu peso actual</p>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

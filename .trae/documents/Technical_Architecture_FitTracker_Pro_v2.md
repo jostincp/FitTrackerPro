@@ -7,22 +7,33 @@ graph TD
     A[Usuario - Navegador] --> B[React 18 + Next.js 14/15]
     B --> C[Supabase Client SDK]
     C --> D[Supabase Backend Platform]
+    B --> U[React Query - TanStack Query]
+    U --> C
     
     B --> E[PWA Service Workers]
     B --> F[IndexedDB - Offline Storage]
-    B --> G[Chart.js - Visualizaciones]
+    B --> G[Chart.js / D3.js - Visualizaciones]
     B --> H[SVG Interactivo - Cuerpo Humano]
+    B --> V[Zod - Validación de Formularios]
     
     D --> I[PostgreSQL Database]
     D --> J[Supabase Auth JWT]
-    D --> K[Supabase Storage]
+    D --> K[Supabase Storage - Documentos]
     D --> L[Supabase Edge Functions]
     D --> M[Supabase Realtime]
+    
+    W[Cloudflare R2] --> X[URLs Firmadas]
+    X --> B
+    L --> W
     
     N[APIs Wearables] --> O[Edge Functions]
     O --> D
     
     P[Netlify CDN] --> B
+    Y[Netlify CI/CD] --> P
+    Z[GitHub Repository] --> Y
+    
+    AA[Lighthouse/Web Vitals] --> B
     
     subgraph "Frontend Layer - Netlify"
         B
@@ -30,6 +41,9 @@ graph TD
         F
         G
         H
+        U
+        V
+        AA
     end
     
     subgraph "Backend as a Service - Supabase"
@@ -40,6 +54,17 @@ graph TD
         L
         M
         O
+    end
+    
+    subgraph "Image Storage - Cloudflare R2"
+        W
+        X
+    end
+    
+    subgraph "Deployment - Netlify"
+        P
+        Y
+        Z
     end
     
     subgraph "External Integrations"
@@ -61,27 +86,35 @@ graph TD
 
 **Frontend:**
 - React@18 + Next.js@14/15 + TypeScript@5
-- Tailwind CSS@3 para diseño responsivo
-- PWA con Service Workers para funcionalidad offline
-- Chart.js@4 para visualizaciones de datos
-- SVG interactivo para diagrama del cuerpo humano
-- Zod@3 para validación de formularios
-- React Query (TanStack Query)@4 para sincronización de datos
+- Tailwind CSS@3 para diseño responsivo y componentes reutilizables
+- PWA con Service Workers para funcionalidad offline e instalación en dispositivos
+- Chart.js@4 / D3.js para visualizaciones de datos y gráficas de evolución física
+- SVG interactivo para diagrama del cuerpo humano y registro de medidas por músculo
+- Zod@3 / Yup para validación robusta de formularios
+- React Query (TanStack Query)@4 para sincronización eficiente con Supabase
+- Lighthouse/Web Vitals para medir rendimiento y experiencia de usuario
 
 **Backend:**
 - Supabase (PostgreSQL + Auth JWT + Storage + Realtime + Edge Functions)
 - Row Level Security (RLS) para seguridad de datos
-- APIs REST automáticas generadas por Supabase
+- APIs REST automáticas y serverless generadas por Supabase
+- Edge Functions para lógica personalizada (cálculos, validaciones)
+
+**Almacenamiento de Imágenes:**
+- Cloudflare R2 para almacenamiento externo de imágenes de progreso físico
+- URLs firmadas y Cloudflare Workers para seguridad y eficiencia
+- Sin costo por egress, escalable a miles de usuarios
+- Libera carga del storage de Supabase
 
 **Deployment:**
-- Netlify (Frontend + PWA + CI/CD automático)
+- Netlify (Frontend + PWA + CI/CD automático + integración con GitHub)
 - Supabase Cloud (Backend services)
 - CDN global para assets estáticos
+- Despliegue ágil con integración continua
 
-**Integraciones Futuras:**
+**Integraciones:**
 - APIs de Wearables: Fitbit, Garmin, Apple Health, Google Fit
-- D3.js para visualizaciones avanzadas
-- Lighthouse/Web Vitals para monitoreo de rendimiento
+- Monitoreo continuo de rendimiento con Lighthouse/Web Vitals
 
 ## 3. Definiciones de Rutas
 
@@ -138,12 +171,39 @@ supabase.from('workouts').insert(workout)
 supabase.from('workouts').update(workout).eq('id', id)
 ```
 
-**Subida de Fotos de Progreso**
+**Gestión de Fotos de Progreso con Cloudflare R2**
 
 ```typescript
-// Supabase Storage API
-supabase.storage.from('progress-photos').upload(path, file)
-supabase.storage.from('progress-photos').getPublicUrl(path)
+// Edge Function para subir a Cloudflare R2
+POST /functions/v1/upload-progress-photo
+
+// Obtener URL firmada para subida directa
+POST /functions/v1/get-upload-url
+
+// Obtener URL firmada para visualización
+GET /functions/v1/get-photo-url/:photoId
+```
+
+Request (Subida):
+| Parámetro | Tipo | Requerido | Descripción |
+|-----------|------|-----------|-------------|
+| file | File | true | Archivo de imagen (JPEG/PNG) |
+| photo_type | string | true | Tipo de foto (front/side/back) |
+| notes | string | false | Notas adicionales |
+
+Response:
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| photo_id | uuid | ID único de la foto |
+| upload_url | string | URL firmada para subida |
+| expires_at | timestamp | Expiración de la URL |
+
+**Almacenamiento de Documentos (Supabase Storage)**
+
+```typescript
+// Para documentos y archivos no críticos
+supabase.storage.from('documents').upload(path, file)
+supabase.storage.from('documents').getPublicUrl(path)
 ```
 
 ### 4.2 Edge Functions Personalizadas
@@ -226,6 +286,8 @@ graph TD
     B --> E[Supabase Server Client]
     C --> E
     D --> F[Supabase Browser Client]
+    D --> AA[React Query - TanStack Query]
+    AA --> F
     
     E --> G[Row Level Security]
     F --> G
@@ -233,16 +295,22 @@ graph TD
     G --> H[PostgreSQL Database]
     
     I[Supabase Edge Functions] --> E
+    I --> BB[Cloudflare R2 API]
+    BB --> CC[Cloudflare Workers]
+    CC --> DD[URLs Firmadas]
+    
     J[Supabase Auth JWT] --> G
-    K[Supabase Storage] --> L[Netlify CDN]
+    K[Supabase Storage - Documentos] --> L[Netlify CDN]
     
     M[PWA Service Worker] --> D
     N[IndexedDB Cache] --> D
-    O[React Query Cache] --> F
+    O[React Query Cache] --> AA
     
     P[Wearable APIs] --> I
-    Q[Chart.js] --> D
+    Q[Chart.js / D3.js] --> D
     R[SVG Body Diagram] --> D
+    S[Zod Validation] --> D
+    T[Lighthouse/Web Vitals] --> A
     
     subgraph "Netlify Platform"
         A
@@ -250,6 +318,7 @@ graph TD
         C
         L
         M
+        T
     end
     
     subgraph "Client Browser"
@@ -259,6 +328,8 @@ graph TD
         O
         Q
         R
+        S
+        AA
     end
     
     subgraph "Supabase Platform"
@@ -268,6 +339,12 @@ graph TD
         I
         J
         K
+    end
+    
+    subgraph "Cloudflare R2 Storage"
+        BB
+        CC
+        DD
     end
     
     subgraph "External APIs"
@@ -404,11 +481,17 @@ erDiagram
     PROGRESS_PHOTOS {
         uuid id PK
         uuid user_id FK
-        string file_path
+        string cloudflare_r2_key
+        string signed_url
+        timestamp url_expires_at
         enum photo_type
         date photo_date
         text notes
+        integer file_size_bytes
+        string mime_type
+        jsonb metadata
         timestamp created_at
+        timestamp updated_at
     }
     
     MUSCLE_GROUPS {
@@ -703,6 +786,52 @@ CREATE POLICY "Users can manage own measurements" ON public.body_measurements
 GRANT ALL PRIVILEGES ON public.body_measurements TO authenticated;
 ```
 
+**Tabla de Fotos de Progreso (Cloudflare R2)**
+
+```sql
+CREATE TABLE public.progress_photos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    cloudflare_r2_key VARCHAR(500) NOT NULL,
+    signed_url TEXT,
+    url_expires_at TIMESTAMP WITH TIME ZONE,
+    photo_type VARCHAR(20) NOT NULL CHECK (photo_type IN ('front', 'side', 'back', 'custom')),
+    photo_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    notes TEXT,
+    file_size_bytes INTEGER,
+    mime_type VARCHAR(50) CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Índices
+CREATE INDEX idx_progress_photos_user_date ON public.progress_photos(user_id, photo_date DESC);
+CREATE INDEX idx_progress_photos_type ON public.progress_photos(photo_type, photo_date DESC);
+CREATE INDEX idx_progress_photos_r2_key ON public.progress_photos(cloudflare_r2_key);
+
+-- RLS
+ALTER TABLE public.progress_photos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own progress photos" ON public.progress_photos
+    USING (auth.uid() = user_id);
+
+-- Permisos
+GRANT ALL PRIVILEGES ON public.progress_photos TO authenticated;
+
+-- Función para actualizar updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_progress_photos_updated_at BEFORE UPDATE
+    ON public.progress_photos FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
 **Datos Iniciales**
 
 ```sql
@@ -725,5 +854,221 @@ INSERT INTO public.exercises (name, description, category, primary_muscle_group_
  (SELECT id FROM public.muscle_groups WHERE name = 'legs'),
  ARRAY['barbell', 'squat_rack'],
  'Coloca la barra sobre los hombros, separa los pies al ancho de los hombros, baja como si te fueras a sentar y vuelve a la posición inicial.');
+```
+
+## 7. Implementación de Cloudflare R2
+
+### 7.1 Edge Functions para Cloudflare R2
+
+**Configuración de Variables de Entorno**
+
+```bash
+# Supabase Edge Functions
+CLOUDFLARE_R2_ACCESS_KEY_ID=your_access_key
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=your_secret_key
+CLOUDFLARE_R2_BUCKET_NAME=fittracker-progress-photos
+CLOUDFLARE_R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
+CLOUDFLARE_R2_PUBLIC_URL=https://your-custom-domain.com
+```
+
+**Edge Function: upload-progress-photo**
+
+```typescript
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { S3Client, PutObjectCommand } from 'https://esm.sh/@aws-sdk/client-s3@3'
+import { getSignedUrl } from 'https://esm.sh/@aws-sdk/s3-request-presigner@3'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+
+    const { photo_type, notes } = await req.json()
+    
+    // Configurar cliente S3 para Cloudflare R2
+    const s3Client = new S3Client({
+      region: 'auto',
+      endpoint: Deno.env.get('CLOUDFLARE_R2_ENDPOINT'),
+      credentials: {
+        accessKeyId: Deno.env.get('CLOUDFLARE_R2_ACCESS_KEY_ID')!,
+        secretAccessKey: Deno.env.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')!,
+      },
+    })
+
+    // Generar clave única para R2
+    const photoId = crypto.randomUUID()
+    const r2Key = `progress-photos/${user.id}/${photoId}.jpg`
+    
+    // Crear comando para subida
+    const putCommand = new PutObjectCommand({
+      Bucket: Deno.env.get('CLOUDFLARE_R2_BUCKET_NAME'),
+      Key: r2Key,
+      ContentType: 'image/jpeg',
+      Metadata: {
+        userId: user.id,
+        photoType: photo_type,
+      },
+    })
+
+    // Generar URL firmada para subida (válida por 1 hora)
+    const uploadUrl = await getSignedUrl(s3Client, putCommand, { expiresIn: 3600 })
+    
+    // Guardar registro en base de datos
+    const { data: photo, error } = await supabase
+      .from('progress_photos')
+      .insert({
+        id: photoId,
+        user_id: user.id,
+        cloudflare_r2_key: r2Key,
+        photo_type,
+        notes,
+        url_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return new Response(
+      JSON.stringify({
+        photo_id: photoId,
+        upload_url: uploadUrl,
+        expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
+    )
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      }
+    )
+  }
+})
+```
+
+**Edge Function: get-photo-url**
+
+```typescript
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { S3Client, GetObjectCommand } from 'https://esm.sh/@aws-sdk/client-s3@3'
+import { getSignedUrl } from 'https://esm.sh/@aws-sdk/s3-request-presigner@3'
+
+serve(async (req) => {
+  try {
+    const url = new URL(req.url)
+    const photoId = url.pathname.split('/').pop()
+    
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+
+    // Obtener información de la foto
+    const { data: photo, error } = await supabase
+      .from('progress_photos')
+      .select('*')
+      .eq('id', photoId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (error || !photo) throw new Error('Photo not found')
+
+    // Verificar si la URL firmada aún es válida
+    const now = new Date()
+    const expiresAt = new Date(photo.url_expires_at)
+    
+    if (photo.signed_url && now < expiresAt) {
+      return new Response(
+        JSON.stringify({ signed_url: photo.signed_url, expires_at: photo.url_expires_at }),
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Generar nueva URL firmada
+    const s3Client = new S3Client({
+      region: 'auto',
+      endpoint: Deno.env.get('CLOUDFLARE_R2_ENDPOINT'),
+      credentials: {
+        accessKeyId: Deno.env.get('CLOUDFLARE_R2_ACCESS_KEY_ID')!,
+        secretAccessKey: Deno.env.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')!,
+      },
+    })
+
+    const getCommand = new GetObjectCommand({
+      Bucket: Deno.env.get('CLOUDFLARE_R2_BUCKET_NAME'),
+      Key: photo.cloudflare_r2_key,
+    })
+
+    const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 })
+    const newExpiresAt = new Date(Date.now() + 3600 * 1000).toISOString()
+
+    // Actualizar URL en base de datos
+    await supabase
+      .from('progress_photos')
+      .update({
+        signed_url: signedUrl,
+        url_expires_at: newExpiresAt,
+      })
+      .eq('id', photoId)
+
+    return new Response(
+      JSON.stringify({ signed_url: signedUrl, expires_at: newExpiresAt }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { 'Content-Type': 'application/json' }, status: 400 }
+    )
+  }
+})
+```
+
+### 7.2 Mejores Prácticas
+
+**Seguridad:**
+- URLs firmadas con expiración corta (1 hora)
+- Validación de tipos de archivo (JPEG, PNG, WebP)
+- Límites de tamaño de archivo (máx. 10MB)
+- Autenticación obligatoria para todas las operaciones
+
+**Rendimiento:**
+- Cache de URLs firmadas en base de datos
+- Compresión automática de imágenes
+- CDN de Cloudflare para entrega global
+- Lazy loading en el frontend
+
+**Escalabilidad:**
+- Sin costo por egress de datos
+- Almacenamiento ilimitado
+- Integración con Cloudflare Workers para procesamiento
+- Backup automático y versionado
 ```
 

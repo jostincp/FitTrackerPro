@@ -1,90 +1,60 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRedirectIfAuthenticated } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase/client';
-import { isValidEmail, validatePassword } from '@/utils';
+import { registerSchema, RegisterFormData } from '@/lib/validations/auth';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   useRedirectIfAuthenticated();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setError,
+    reset,
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-
-    const { name, email, password, confirmPassword } = formData;
-
-    // Validation
-    if (!name || !email || !password || !confirmPassword) {
-      setError('Por favor, completa todos los campos');
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      setError('Por favor, ingresa un email válido');
-      return;
-    }
-
-    const passwordValidation = validatePassword(password);
-    if (!passwordValidation.isValid) {
-      setError(passwordValidation.errors[0]);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
-      return;
-    }
-
-    setLoading(true);
-
+  const onSubmit = async (data: RegisterFormData) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
         options: {
           data: {
-            name,
+            name: data.name,
           },
         },
       });
 
       if (error) {
         if (error.message.includes('User already registered')) {
-          setError('Este email ya está registrado. Intenta iniciar sesión.');
+          setError('root', {
+            message: 'Este email ya está registrado. Intenta iniciar sesión.',
+          });
         } else {
-          setError(error.message);
+          setError('root', { message: error.message });
         }
-      } else if (data.user) {
+      } else if (authData.user) {
         // Create user profile
         const { error: profileError } = await supabase
           .from('users')
           .insert({
-            id: data.user.id,
-            email: data.user.email!,
-            name,
+            id: authData.user.id,
+            email: authData.user.email!,
+            name: data.name,
           });
 
         if (profileError) {
@@ -94,19 +64,15 @@ export default function RegisterPage() {
         setMessage(
           'Cuenta creada exitosamente. Por favor, revisa tu email para confirmar tu cuenta.'
         );
+        toast.success('¡Cuenta creada exitosamente!');
         
         // Clear form
-        setFormData({
-          name: '',
-          email: '',
-          password: '',
-          confirmPassword: '',
-        });
+        reset();
       }
     } catch (err) {
-      setError('Error inesperado. Inténtalo de nuevo.');
-    } finally {
-      setLoading(false);
+      setError('root', {
+        message: 'Error inesperado. Inténtalo de nuevo.',
+      });
     }
   };
 
@@ -142,7 +108,7 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -150,16 +116,18 @@ export default function RegisterPage() {
               </label>
               <input
                 id="name"
-                name="name"
                 type="text"
                 autoComplete="name"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm ${
+                  errors.name ? 'border-red-300' : 'border-gray-300'
+                }`}
                 placeholder="Tu nombre completo"
-                value={formData.name}
-                onChange={handleChange}
-                disabled={loading}
+                disabled={isSubmitting}
+                {...register('name')}
               />
+              {errors.name && (
+                <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+              )}
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -167,16 +135,18 @@ export default function RegisterPage() {
               </label>
               <input
                 id="email"
-                name="email"
                 type="email"
                 autoComplete="email"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm ${
+                  errors.email ? 'border-red-300' : 'border-gray-300'
+                }`}
                 placeholder="tu@email.com"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={loading}
+                disabled={isSubmitting}
+                {...register('email')}
               />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              )}
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
@@ -185,15 +155,14 @@ export default function RegisterPage() {
               <div className="mt-1 relative">
                 <input
                   id="password"
-                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  className={`appearance-none relative block w-full px-3 py-2 pr-10 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm ${
+                    errors.password ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="Mínimo 8 caracteres"
-                  value={formData.password}
-                  onChange={handleChange}
-                  disabled={loading}
+                  disabled={isSubmitting}
+                  {...register('password')}
                 />
                 <button
                   type="button"
@@ -207,6 +176,9 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              )}
             </div>
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
@@ -215,15 +187,14 @@ export default function RegisterPage() {
               <div className="mt-1 relative">
                 <input
                   id="confirmPassword"
-                  name="confirmPassword"
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  className={`appearance-none relative block w-full px-3 py-2 pr-10 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm ${
+                    errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="Repite tu contraseña"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  disabled={loading}
+                  disabled={isSubmitting}
+                  {...register('confirmPassword')}
                 />
                 <button
                   type="button"
@@ -237,10 +208,13 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
+              {errors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+              )}
             </div>
           </div>
 
-          {error && (
+          {errors.root && (
             <div className="rounded-md bg-red-50 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
@@ -257,7 +231,7 @@ export default function RegisterPage() {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-red-800">{error}</p>
+                  <p className="text-sm text-red-800">{errors.root.message}</p>
                 </div>
               </div>
             </div>
@@ -289,10 +263,10 @@ export default function RegisterPage() {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? (
+              {isSubmitting ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Creando cuenta...

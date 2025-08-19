@@ -1,61 +1,57 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRedirectIfAuthenticated } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase/client';
-import { isValidEmail } from '@/utils';
+import { loginSchema, LoginFormData } from '@/lib/validations/auth';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   useRedirectIfAuthenticated();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setError,
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+  });
 
-    // Validation
-    if (!email || !password) {
-      setError('Por favor, completa todos los campos');
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      setError('Por favor, ingresa un email válido');
-      return;
-    }
-
-    setLoading(true);
-
+  const onSubmit = async (data: LoginFormData) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: data.email,
+        password: data.password,
       });
 
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
-          setError('Credenciales inválidas. Verifica tu email y contraseña.');
+          setError('root', {
+            message: 'Credenciales inválidas. Verifica tu email y contraseña.',
+          });
         } else if (error.message.includes('Email not confirmed')) {
-          setError('Por favor, confirma tu email antes de iniciar sesión.');
+          setError('root', {
+            message: 'Por favor, confirma tu email antes de iniciar sesión.',
+          });
         } else {
-          setError(error.message);
+          setError('root', { message: error.message });
         }
       } else {
         setMessage('Iniciando sesión...');
+        toast.success('¡Bienvenido de vuelta!');
       }
     } catch (err) {
-      setError('Error inesperado. Inténtalo de nuevo.');
-    } finally {
-      setLoading(false);
+      setError('root', {
+        message: 'Error inesperado. Inténtalo de nuevo.',
+      });
     }
   };
 
@@ -91,7 +87,7 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -99,16 +95,18 @@ export default function LoginPage() {
               </label>
               <input
                 id="email"
-                name="email"
                 type="email"
                 autoComplete="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm ${
+                  errors.email ? 'border-red-300' : 'border-gray-300'
+                }`}
                 placeholder="Dirección de email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                disabled={isSubmitting}
+                {...register('email')}
               />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              )}
             </div>
             <div className="relative">
               <label htmlFor="password" className="sr-only">
@@ -116,16 +114,18 @@ export default function LoginPage() {
               </label>
               <input
                 id="password"
-                name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm ${
+                  errors.password ? 'border-red-300' : 'border-gray-300'
+                }`}
                 placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
+                disabled={isSubmitting}
+                {...register('password')}
               />
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              )}
               <button
                 type="button"
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
@@ -151,7 +151,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {error && (
+          {errors.root && (
             <div className="rounded-md bg-red-50 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
@@ -168,7 +168,7 @@ export default function LoginPage() {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-red-800">{error}</p>
+                  <p className="text-sm text-red-800">{errors.root.message}</p>
                 </div>
               </div>
             </div>
@@ -200,10 +200,10 @@ export default function LoginPage() {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? (
+              {isSubmitting ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Iniciando sesión...

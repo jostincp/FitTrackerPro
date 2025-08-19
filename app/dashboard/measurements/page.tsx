@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, Scale, Ruler, Activity, TrendingUp, Plus } from 'lucide-react';
 import { MeasurementFormData, WeightMeasurement, BodyMeasurement } from '@/types';
+import BodyMap from '@/components/BodyMap';
 
 // Tipo combinado para la página de medidas
 type CombinedMeasurement = {
@@ -60,6 +61,8 @@ export default function MeasurementsPage() {
     muscleMass: '',
     notes: ''
   });
+
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const [measurements, setMeasurements] = useState<CombinedMeasurement[]>([
     {
@@ -115,6 +118,24 @@ export default function MeasurementsPage() {
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleZoneClick = (fieldId: string) => {
+    setFocusedField(fieldId);
+    // Enfocar el campo correspondiente
+    const element = document.getElementById(fieldId);
+    if (element) {
+      element.focus();
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleFieldFocus = (fieldId: string) => {
+    setFocusedField(fieldId);
+  };
+
+  const handleFieldBlur = () => {
+    setFocusedField(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -259,72 +280,98 @@ export default function MeasurementsPage() {
                     <Ruler className="h-5 w-5" />
                     Medidas Corporales (cm)
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="chest">Pecho</Label>
-                      <Input
-                        id="chest"
-                        type="number"
-                        step="0.1"
-                        placeholder="95.0"
-                        value={formData.chest}
-                        onChange={(e) => handleInputChange('chest', e.target.value)}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Mapa corporal */}
+                    <div className="order-2 lg:order-1">
+                      <BodyMap 
+                        onZoneClick={handleZoneClick}
+                        highlightedZone={focusedField || undefined}
+                        className="sticky top-4"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="waist">Cintura</Label>
-                      <Input
-                        id="waist"
-                        type="number"
-                        step="0.1"
-                        placeholder="80.0"
-                        value={formData.waist}
-                        onChange={(e) => handleInputChange('waist', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="hips">Caderas</Label>
-                      <Input
-                        id="hips"
-                        type="number"
-                        step="0.1"
-                        placeholder="98.0"
-                        value={formData.hips}
-                        onChange={(e) => handleInputChange('hips', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="biceps">Bíceps</Label>
-                      <Input
-                        id="biceps"
-                        type="number"
-                        step="0.1"
-                        placeholder="35.0"
-                        value={formData.biceps}
-                        onChange={(e) => handleInputChange('biceps', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="thighs">Muslos</Label>
-                      <Input
-                        id="thighs"
-                        type="number"
-                        step="0.1"
-                        placeholder="58.0"
-                        value={formData.thighs}
-                        onChange={(e) => handleInputChange('thighs', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="neck">Cuello</Label>
-                      <Input
-                        id="neck"
-                        type="number"
-                        step="0.1"
-                        placeholder="38.0"
-                        value={formData.neck}
-                        onChange={(e) => handleInputChange('neck', e.target.value)}
-                      />
+                    
+                    {/* Campos de medidas */}
+                    <div className="order-1 lg:order-2 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="chest">Pecho</Label>
+                          <Input
+                            id="chest"
+                            type="number"
+                            step="0.1"
+                            placeholder="95.0"
+                            value={formData.chest}
+                            onChange={(e) => handleInputChange('chest', e.target.value)}
+                            onFocus={() => handleFieldFocus('chest')}
+                            onBlur={handleFieldBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="waist">Cintura</Label>
+                          <Input
+                            id="waist"
+                            type="number"
+                            step="0.1"
+                            placeholder="80.0"
+                            value={formData.waist}
+                            onChange={(e) => handleInputChange('waist', e.target.value)}
+                            onFocus={() => handleFieldFocus('waist')}
+                            onBlur={handleFieldBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="hips">Caderas</Label>
+                          <Input
+                            id="hips"
+                            type="number"
+                            step="0.1"
+                            placeholder="98.0"
+                            value={formData.hips}
+                            onChange={(e) => handleInputChange('hips', e.target.value)}
+                            onFocus={() => handleFieldFocus('hips')}
+                            onBlur={handleFieldBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="biceps">Bíceps</Label>
+                          <Input
+                            id="biceps"
+                            type="number"
+                            step="0.1"
+                            placeholder="35.0"
+                            value={formData.biceps}
+                            onChange={(e) => handleInputChange('biceps', e.target.value)}
+                            onFocus={() => handleFieldFocus('biceps')}
+                            onBlur={handleFieldBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="thighs">Muslos</Label>
+                          <Input
+                            id="thighs"
+                            type="number"
+                            step="0.1"
+                            placeholder="58.0"
+                            value={formData.thighs}
+                            onChange={(e) => handleInputChange('thighs', e.target.value)}
+                            onFocus={() => handleFieldFocus('thighs')}
+                            onBlur={handleFieldBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="neck">Cuello</Label>
+                          <Input
+                            id="neck"
+                            type="number"
+                            step="0.1"
+                            placeholder="38.0"
+                            value={formData.neck}
+                            onChange={(e) => handleInputChange('neck', e.target.value)}
+                            onFocus={() => handleFieldFocus('neck')}
+                            onBlur={handleFieldBlur}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

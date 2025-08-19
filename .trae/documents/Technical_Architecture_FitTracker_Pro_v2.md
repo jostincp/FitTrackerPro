@@ -4,71 +4,84 @@
 
 ```mermaid
 graph TD
-    A[Usuario - Navegador] --> B[Next.js 14 Frontend]
+    A[Usuario - Navegador] --> B[React 18 + Next.js 14/15]
     B --> C[Supabase Client SDK]
-    C --> D[Supabase Backend Services]
+    C --> D[Supabase Backend Platform]
     
-    B --> E[Service Workers - PWA]
-    B --> F[IndexedDB - Cache Local]
+    B --> E[PWA Service Workers]
+    B --> F[IndexedDB - Offline Storage]
+    B --> G[Chart.js - Visualizaciones]
+    B --> H[SVG Interactivo - Cuerpo Humano]
     
-    D --> G[PostgreSQL Database]
-    D --> H[Supabase Auth]
-    D --> I[Supabase Storage]
-    D --> J[Supabase Realtime]
+    D --> I[PostgreSQL Database]
+    D --> J[Supabase Auth JWT]
+    D --> K[Supabase Storage]
+    D --> L[Supabase Edge Functions]
+    D --> M[Supabase Realtime]
     
-    K[Chart.js/D3] --> B
-    L[Three.js - Modelo 3D] --> B
+    N[APIs Wearables] --> O[Edge Functions]
+    O --> D
     
-    subgraph "Frontend Layer"
+    P[Netlify CDN] --> B
+    
+    subgraph "Frontend Layer - Netlify"
         B
         E
         F
-        K
-        L
-    end
-    
-    subgraph "Backend as a Service (Supabase)"
-        D
         G
         H
+    end
+    
+    subgraph "Backend as a Service - Supabase"
+        D
         I
         J
+        K
+        L
+        M
+        O
     end
     
-    subgraph "External Services"
-        M[Vercel Deployment]
-        N[CDN Assets]
+    subgraph "External Integrations"
+        N
+        Q[Fitbit API]
+        R[Garmin API]
+        S[Apple Health]
+        T[Google Fit]
     end
     
-    B --> M
-    I --> N
+    N --> O
+    Q --> O
+    R --> O
+    S --> O
+    T --> O
 ```
 
 ## 2. Descripción de Tecnologías
 
 **Frontend:**
-
-* React\@18 + Next.js\@14/15 + TypeScript\@5
-
-* Tailwind CSS\@3 + Headless UI\@1.7
-
-* Chart.js\@4 + Three.js\@0.158 (modelo 3D)
-
-* PWA con Workbox\@7
-
-* Framer Motion\@10 (animaciones)
+- React@18 + Next.js@14/15 + TypeScript@5
+- Tailwind CSS@3 para diseño responsivo
+- PWA con Service Workers para funcionalidad offline
+- Chart.js@4 para visualizaciones de datos
+- SVG interactivo para diagrama del cuerpo humano
+- Zod@3 para validación de formularios
+- React Query (TanStack Query)@4 para sincronización de datos
 
 **Backend:**
-
-* Supabase (PostgreSQL + Auth + Storage + Realtime)
-
-* Edge Functions para lógica serverless
+- Supabase (PostgreSQL + Auth JWT + Storage + Realtime + Edge Functions)
+- Row Level Security (RLS) para seguridad de datos
+- APIs REST automáticas generadas por Supabase
 
 **Deployment:**
+- Netlify (Frontend + PWA + CI/CD automático)
+- Supabase Cloud (Backend services)
+- CDN global para assets estáticos
 
-* Vercel (Frontend + Edge Functions)
-
-* Supabase Cloud (Backend services)
+**Integraciones Futuras:**
+- APIs de Wearables: Fitbit, Garmin, Apple Health, Google Fit
+- D3.js para visualizaciones avanzadas
+- Lighthouse/Web Vitals para monitoreo de rendimiento
 
 ## 3. Definiciones de Rutas
 
@@ -135,7 +148,7 @@ supabase.storage.from('progress-photos').getPublicUrl(path)
 
 ### 4.2 Edge Functions Personalizadas
 
-**Análisis de Progreso**
+**Análisis de Progreso con IA**
 
 ```
 POST /functions/v1/analyze-progress
@@ -156,6 +169,28 @@ Response:
 | progress\_score | number | Puntuación de progreso (0-100) |
 | trends          | object | Tendencias por categoría       |
 | recommendations | array  | Recomendaciones personalizadas |
+| ai\_insights    | object | Análisis con inteligencia artificial |
+
+**Sincronización con Wearables**
+
+```
+POST /functions/v1/sync-wearable
+```
+
+Request:
+
+| Parámetro | Tipo   | Requerido | Descripción                    |
+| --------- | ------ | --------- | ------------------------------ |
+| user\_id  | uuid   | true      | ID del usuario                 |
+| provider  | string | true      | Proveedor (fitbit/garmin/apple/google) |
+| auth\_token | string | true    | Token de autorización del wearable |
+
+Response:
+
+| Parámetro     | Tipo    | Descripción                    |
+| ------------- | ------- | ------------------------------ |
+| synced\_data  | object  | Datos sincronizados            |
+| last\_sync    | timestamp | Última sincronización        |
 
 **Exportación de Datos**
 
@@ -170,6 +205,7 @@ Request:
 | user\_id    | uuid   | true      | ID del usuario                        |
 | format      | string | true      | Formato de exportación (csv/pdf/json) |
 | date\_range | object | false     | Rango de fechas                       |
+| include\_photos | boolean | false | Incluir fotos de progreso          |
 
 Response:
 
@@ -177,12 +213,13 @@ Response:
 | ------------- | --------- | ------------------------------ |
 | download\_url | string    | URL temporal de descarga       |
 | expires\_at   | timestamp | Fecha de expiración del enlace |
+| file\_size    | number    | Tamaño del archivo en bytes    |
 
 ## 5. Arquitectura del Servidor
 
 ```mermaid
 graph TD
-    A[Next.js App Router] --> B[API Routes]
+    A[Next.js App Router - Netlify] --> B[API Routes]
     A --> C[Server Components]
     A --> D[Client Components]
     
@@ -195,19 +232,33 @@ graph TD
     
     G --> H[PostgreSQL Database]
     
-    I[Edge Functions] --> E
-    J[Supabase Auth] --> G
-    K[Supabase Storage] --> L[CDN]
+    I[Supabase Edge Functions] --> E
+    J[Supabase Auth JWT] --> G
+    K[Supabase Storage] --> L[Netlify CDN]
     
-    subgraph "Next.js Server"
+    M[PWA Service Worker] --> D
+    N[IndexedDB Cache] --> D
+    O[React Query Cache] --> F
+    
+    P[Wearable APIs] --> I
+    Q[Chart.js] --> D
+    R[SVG Body Diagram] --> D
+    
+    subgraph "Netlify Platform"
         A
         B
         C
+        L
+        M
     end
     
     subgraph "Client Browser"
         D
         F
+        N
+        O
+        Q
+        R
     end
     
     subgraph "Supabase Platform"
@@ -217,6 +268,10 @@ graph TD
         I
         J
         K
+    end
+    
+    subgraph "External APIs"
+        P
     end
 ```
 
@@ -231,6 +286,9 @@ erDiagram
     USERS ||--o{ BODY_MEASUREMENTS : records
     USERS ||--o{ WEIGHT_ENTRIES : logs
     USERS ||--o{ PROGRESS_PHOTOS : uploads
+    USERS ||--o{ WEARABLE_CONNECTIONS : connects
+    USERS ||--o{ WEARABLE_DATA : syncs
+    USERS ||--o{ AI_INSIGHTS : generates
     
     WORKOUTS ||--|{ WORKOUT_EXERCISES : contains
     ROUTINES ||--|{ ROUTINE_EXERCISES : includes
@@ -239,6 +297,8 @@ erDiagram
     EXERCISES ||--o{ WORKOUT_EXERCISES : used_in
     EXERCISES ||--o{ ROUTINE_EXERCISES : planned_in
     MUSCLE_GROUPS ||--o{ EXERCISES : targets
+    
+    WEARABLE_CONNECTIONS ||--o{ WEARABLE_DATA : produces
     
     USERS {
         uuid id PK
@@ -358,6 +418,41 @@ erDiagram
         string color_hex
         jsonb body_diagram_coordinates
     }
+    
+    WEARABLE_CONNECTIONS {
+        uuid id PK
+        uuid user_id FK
+        enum provider
+        string access_token
+        string refresh_token
+        timestamp token_expires_at
+        boolean is_active
+        timestamp last_sync
+        timestamp created_at
+    }
+    
+    WEARABLE_DATA {
+        uuid id PK
+        uuid user_id FK
+        uuid connection_id FK
+        enum data_type
+        jsonb data_payload
+        date data_date
+        timestamp synced_at
+        timestamp created_at
+    }
+    
+    AI_INSIGHTS {
+        uuid id PK
+        uuid user_id FK
+        enum insight_type
+        jsonb analysis_data
+        text recommendations
+        float confidence_score
+        date analysis_period_start
+        date analysis_period_end
+        timestamp created_at
+    }
 ```
 
 ### 6.2 Lenguaje de Definición de Datos (DDL)
@@ -398,6 +493,106 @@ GRANT SELECT ON public.user_profiles TO anon;
 CREATE TABLE public.workouts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    notes TEXT,
+    duration_minutes INTEGER,
+    workout_date DATE NOT NULL,
+    status VARCHAR(20) DEFAULT 'planned' CHECK (status IN ('planned', 'in_progress', 'completed', 'skipped')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- RLS para workouts
+ALTER TABLE public.workouts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own workouts" ON public.workouts
+    FOR ALL USING (auth.uid() = user_id);
+
+GRANT ALL PRIVILEGES ON public.workouts TO authenticated;
+GRANT SELECT ON public.workouts TO anon;
+
+**Tabla de Conexiones de Wearables**
+
+```sql
+CREATE TABLE public.wearable_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    provider VARCHAR(20) NOT NULL CHECK (provider IN ('fitbit', 'garmin', 'apple_health', 'google_fit')),
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT true,
+    last_sync TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, provider)
+);
+
+-- RLS para wearable_connections
+ALTER TABLE public.wearable_connections ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own wearable connections" ON public.wearable_connections
+    FOR ALL USING (auth.uid() = user_id);
+
+GRANT ALL PRIVILEGES ON public.wearable_connections TO authenticated;
+
+**Tabla de Datos de Wearables**
+
+```sql
+CREATE TABLE public.wearable_data (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    connection_id UUID NOT NULL REFERENCES public.wearable_connections(id) ON DELETE CASCADE,
+    data_type VARCHAR(50) NOT NULL CHECK (data_type IN ('steps', 'heart_rate', 'calories', 'sleep', 'activity', 'weight')),
+    data_payload JSONB NOT NULL,
+    data_date DATE NOT NULL,
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, connection_id, data_type, data_date)
+);
+
+-- Índices para wearable_data
+CREATE INDEX idx_wearable_data_user_date ON public.wearable_data(user_id, data_date DESC);
+CREATE INDEX idx_wearable_data_type ON public.wearable_data(data_type, data_date DESC);
+
+-- RLS para wearable_data
+ALTER TABLE public.wearable_data ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own wearable data" ON public.wearable_data
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "System can insert wearable data" ON public.wearable_data
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+GRANT SELECT, INSERT ON public.wearable_data TO authenticated;
+
+**Tabla de Insights de IA**
+
+```sql
+CREATE TABLE public.ai_insights (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.user_profiles(id) ON DELETE CASCADE,
+    insight_type VARCHAR(50) NOT NULL CHECK (insight_type IN ('progress_analysis', 'workout_recommendation', 'nutrition_advice', 'recovery_suggestion')),
+    analysis_data JSONB NOT NULL,
+    recommendations TEXT,
+    confidence_score DECIMAL(3,2) CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    analysis_period_start DATE NOT NULL,
+    analysis_period_end DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Índices para ai_insights
+CREATE INDEX idx_ai_insights_user_type ON public.ai_insights(user_id, insight_type, created_at DESC);
+CREATE INDEX idx_ai_insights_confidence ON public.ai_insights(confidence_score DESC);
+
+-- RLS para ai_insights
+ALTER TABLE public.ai_insights ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own AI insights" ON public.ai_insights
+    FOR SELECT USING (auth.uid() = user_id);
+
+GRANT SELECT ON public.ai_insights TO authenticated;
+GRANT INSERT ON public.ai_insights TO service_role; -- Solo para Edge Functions
     name VARCHAR(100) NOT NULL,
     notes TEXT,
     duration_minutes INTEGER,

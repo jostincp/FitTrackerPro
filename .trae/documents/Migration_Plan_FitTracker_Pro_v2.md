@@ -3,122 +3,156 @@
 ## 1. Resumen Ejecutivo
 
 ### Situación Actual
-- **Tecnología:** Vanilla JavaScript, HTML5, CSS3
+- **Tecnología:** Next.js básico con configuración mixta Vite/Next.js
 - **Almacenamiento:** LocalStorage del navegador
-- **Funcionalidades:** Dashboard básico, registro de entrenamientos, rutinas, mediciones, peso, fotos
-- **Limitaciones:** Sin sincronización, sin backup, funcionalidad offline limitada
+- **Funcionalidades:** Dashboard, registro de entrenamientos, rutinas, mediciones corporales, peso, fotos
+- **Limitaciones:** Sin backend robusto, sin sincronización en la nube, sin PWA, sin integraciones
 
 ### Objetivo de Migración
-- **Nueva Tecnología:** React 18 + Next.js 14/15 + TypeScript + Supabase
-- **Mejoras:** Sincronización en la nube, PWA, análisis avanzado, UI moderna
-- **Cronograma:** 12 semanas de desarrollo
-- **Estrategia:** Migración incremental con coexistencia temporal
+- **Nueva Tecnología:** React 18 + Next.js 14/15 + TypeScript + Tailwind CSS + Supabase + PWA
+- **Deployment:** Migración de Vercel a Netlify
+- **Mejoras:** Backend completo con Supabase, PWA, integraciones con wearables, análisis con IA, UI moderna
+- **Cronograma:** 8 semanas de desarrollo (proyecto ya iniciado)
+- **Estrategia:** Migración completa del stack tecnológico con preservación de datos existentes
 
 ## 2. Análisis de Datos Existentes
 
-### 2.1 Estructura de Datos Actual (LocalStorage)
+### 2.1 Estructura de Datos Actual
 
-```javascript
-// Estructura actual en localStorage
-const currentDataStructure = {
-  // Datos de usuario
-  userProfile: {
-    name: string,
-    age: number,
-    weight: number,
-    height: number
-  },
-  
-  // Entrenamientos
-  workouts: [{
-    id: string,
-    date: string,
-    exercises: [{
-      name: string,
-      sets: [{
-        weight: number,
-        reps: number,
-        rest: number
-      }]
-    }]
-  }],
-  
-  // Rutinas
-  routines: [{
-    id: string,
-    name: string,
-    exercises: [{
-      name: string,
-      sets: number,
-      reps: string,
-      weight: number
-    }]
-  }],
-  
-  // Mediciones corporales
-  measurements: [{
-    date: string,
-    chest: number,
-    waist: number,
-    arms: number,
-    legs: number
-  }],
-  
-  // Registro de peso
-  weightHistory: [{
-    date: string,
-    weight: number
-  }],
-  
-  // Fotos de progreso
-  progressPhotos: [{
-    id: string,
-    date: string,
-    dataUrl: string, // Base64
-    type: string
-  }]
-};
-```
-
-### 2.2 Script de Migración de Datos
+**Estado Actual del Proyecto:**
+- Frontend: Next.js 14 con App Router
+- Componentes: React con TypeScript
+- Estilos: Tailwind CSS
+- Datos: LocalStorage (temporal) + tipos TypeScript definidos
+- Funcionalidades implementadas: Dashboard, mediciones corporales
 
 ```typescript
-// utils/dataMigration.ts
-export interface LegacyData {
-  userProfile: any;
-  workouts: any[];
-  routines: any[];
-  measurements: any[];
-  weightHistory: any[];
-  progressPhotos: any[];
+// Tipos TypeScript actuales (types/index.ts)
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  age?: number;
+  weight?: number;
+  height?: number;
+  fitnessLevel?: 'beginner' | 'intermediate' | 'advanced';
 }
 
-export class DataMigrationService {
-  private supabase: SupabaseClient;
+export interface WorkoutExercise {
+  id: string;
+  name: string;
+  sets: ExerciseSet[];
+  notes?: string;
+}
+
+export interface ExerciseSet {
+  weight: number;
+  reps: number;
+  rpe?: number;
+  restTime?: number;
+}
+
+export interface MeasurementFormData {
+  weight: number;
+  height: number;
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  biceps?: number;
+  thighs?: number;
+  neck?: number;
+  bodyFat?: number;
+  muscleMass?: number;
+  date: string;
+  notes?: string;
+}
+
+export interface WeightMeasurement {
+  id: string;
+  weight: number;
+  date: string;
+  bmi?: number;
+}
+
+export interface BodyMeasurement {
+  id: string;
+  date: string;
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  biceps?: number;
+  thighs?: number;
+  neck?: number;
+  bodyFat?: number;
+  muscleMass?: number;
+  notes?: string;
+}
+
+export interface ProgressPhoto {
+  id: string;
+  date: string;
+  imageUrl: string;
+  type: 'front' | 'side' | 'back';
+  notes?: string;
+}
+```
+
+### 2.2 Plan de Migración Tecnológica
+
+**Fases de Migración:**
+
+1. **Configuración de Supabase** (Semana 1)
+2. **Migración de Autenticación** (Semana 2)
+3. **Migración de Base de Datos** (Semana 3-4)
+4. **Implementación de PWA** (Semana 5)
+5. **Integraciones con Wearables** (Semana 6-7)
+6. **Deploy en Netlify** (Semana 8)
+
+```typescript
+// lib/supabase/migration.ts
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
+import type { 
+  UserProfile, 
+  MeasurementFormData, 
+  WeightMeasurement, 
+  BodyMeasurement,
+  ProgressPhoto 
+} from '@/types';
+
+export class SupabaseMigrationService {
+  private supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   
-  constructor(supabaseClient: SupabaseClient) {
-    this.supabase = supabaseClient;
-  }
-  
-  async migrateLegacyData(legacyData: LegacyData, userId: string) {
+  async migrateLocalStorageData(userId: string) {
     try {
-      // 1. Migrar perfil de usuario
-      await this.migrateUserProfile(legacyData.userProfile, userId);
+      // 1. Obtener datos del localStorage
+      const localData = this.getLocalStorageData();
       
-      // 2. Migrar entrenamientos
-      await this.migrateWorkouts(legacyData.workouts, userId);
+      // 2. Migrar perfil de usuario
+      if (localData.userProfile) {
+        await this.migrateUserProfile(localData.userProfile, userId);
+      }
       
-      // 3. Migrar rutinas
-      await this.migrateRoutines(legacyData.routines, userId);
+      // 3. Migrar mediciones corporales
+      if (localData.measurements?.length > 0) {
+        await this.migrateMeasurements(localData.measurements, userId);
+      }
       
-      // 4. Migrar mediciones
-      await this.migrateMeasurements(legacyData.measurements, userId);
+      // 4. Migrar historial de peso
+      if (localData.weightHistory?.length > 0) {
+        await this.migrateWeightHistory(localData.weightHistory, userId);
+      }
       
-      // 5. Migrar historial de peso
-      await this.migrateWeightHistory(legacyData.weightHistory, userId);
+      // 5. Migrar fotos de progreso
+      if (localData.progressPhotos?.length > 0) {
+        await this.migrateProgressPhotos(localData.progressPhotos, userId);
+      }
       
-      // 6. Migrar fotos (convertir base64 a archivos)
-      await this.migrateProgressPhotos(legacyData.progressPhotos, userId);
+      // 6. Limpiar localStorage después de migración exitosa
+      this.clearLocalStorage();
       
       return { success: true, message: 'Migración completada exitosamente' };
     } catch (error) {
@@ -127,68 +161,101 @@ export class DataMigrationService {
     }
   }
   
-  private async migrateUserProfile(profile: any, userId: string) {
+  private getLocalStorageData() {
+    return {
+      userProfile: JSON.parse(localStorage.getItem('userProfile') || 'null'),
+      measurements: JSON.parse(localStorage.getItem('measurements') || '[]'),
+      weightHistory: JSON.parse(localStorage.getItem('weightHistory') || '[]'),
+      progressPhotos: JSON.parse(localStorage.getItem('progressPhotos') || '[]')
+    };
+  }
+  
+  private async migrateUserProfile(profile: UserProfile, userId: string) {
     const { data, error } = await this.supabase
       .from('user_profiles')
       .upsert({
         id: userId,
         full_name: profile.name,
         height_cm: profile.height,
-        // Mapear otros campos según sea necesario
+        fitness_level: profile.fitnessLevel || 'beginner'
       });
     
     if (error) throw error;
     return data;
   }
   
-  private async migrateWorkouts(workouts: any[], userId: string) {
-    for (const workout of workouts) {
-      // Crear entrenamiento
-      const { data: workoutData, error: workoutError } = await this.supabase
-        .from('workouts')
-        .insert({
-          user_id: userId,
-          name: `Entrenamiento ${new Date(workout.date).toLocaleDateString()}`,
-          workout_date: workout.date,
-          status: 'completed'
-        })
-        .select()
-        .single();
-      
-      if (workoutError) throw workoutError;
-      
-      // Migrar ejercicios del entrenamiento
-      for (const exercise of workout.exercises) {
-        await this.migrateWorkoutExercise(exercise, workoutData.id);
+  private async migrateMeasurements(measurements: BodyMeasurement[], userId: string) {
+    const measurementData = measurements.map(measurement => ({
+      user_id: userId,
+      chest_cm: measurement.chest,
+      waist_cm: measurement.waist,
+      hips_cm: measurement.hips,
+      left_arm_cm: measurement.biceps,
+      right_arm_cm: measurement.biceps,
+      left_thigh_cm: measurement.thighs,
+      right_thigh_cm: measurement.thighs,
+      neck_cm: measurement.neck,
+      measurement_date: measurement.date
+    }));
+    
+    const { data, error } = await this.supabase
+      .from('body_measurements')
+      .insert(measurementData);
+    
+    if (error) throw error;
+    return data;
+  }
+  
+  private async migrateWeightHistory(weightHistory: WeightMeasurement[], userId: string) {
+    const weightData = weightHistory.map(entry => ({
+      user_id: userId,
+      weight_kg: entry.weight,
+      entry_date: entry.date
+    }));
+    
+    const { data, error } = await this.supabase
+      .from('weight_entries')
+      .insert(weightData);
+    
+    if (error) throw error;
+    return data;
+  }
+  
+  private async migrateProgressPhotos(photos: ProgressPhoto[], userId: string) {
+    for (const photo of photos) {
+      // Si la foto está en base64, convertir a blob
+      if (photo.imageUrl.startsWith('data:')) {
+        const blob = this.base64ToBlob(photo.imageUrl);
+        const fileName = `${userId}/${photo.date}_${photo.id}.jpg`;
+        
+        // Subir a Supabase Storage
+        const { data: uploadData, error: uploadError } = await this.supabase.storage
+          .from('progress-photos')
+          .upload(fileName, blob);
+        
+        if (uploadError) throw uploadError;
+        
+        // Guardar referencia en base de datos
+        const { error: dbError } = await this.supabase
+          .from('progress_photos')
+          .insert({
+            user_id: userId,
+            file_path: fileName,
+            photo_type: photo.type,
+            photo_date: photo.date,
+            notes: photo.notes
+          });
+        
+        if (dbError) throw dbError;
       }
     }
   }
   
-  private async migrateProgressPhotos(photos: any[], userId: string) {
-    for (const photo of photos) {
-      // Convertir base64 a blob
-      const blob = this.base64ToBlob(photo.dataUrl);
-      const fileName = `${userId}/${photo.date}_${photo.id}.jpg`;
-      
-      // Subir a Supabase Storage
-      const { data: uploadData, error: uploadError } = await this.supabase.storage
-        .from('progress-photos')
-        .upload(fileName, blob);
-      
-      if (uploadError) throw uploadError;
-      
-      // Guardar referencia en base de datos
-      const { error: dbError } = await this.supabase
-        .from('progress_photos')
-        .insert({
-          user_id: userId,
-          file_path: fileName,
-          photo_type: photo.type || 'front',
-          photo_date: photo.date
-        });
-      
-      if (dbError) throw dbError;
-    }
+  private clearLocalStorage() {
+    localStorage.removeItem('userProfile');
+    localStorage.removeItem('measurements');
+    localStorage.removeItem('weightHistory');
+    localStorage.removeItem('progressPhotos');
   }
   
   private base64ToBlob(base64: string): Blob {
@@ -201,6 +268,172 @@ export class DataMigrationService {
     return new Blob([byteArray], { type: 'image/jpeg' });
   }
 }
+```
+
+## 3. Cronograma Detallado de Migración
+
+### Semana 1: Configuración de Supabase
+**Objetivos:**
+- Configurar proyecto Supabase
+- Implementar autenticación
+- Configurar base de datos inicial
+
+**Tareas:**
+- [ ] Crear proyecto en Supabase
+- [ ] Configurar variables de entorno
+- [ ] Implementar Supabase Auth en Next.js
+- [ ] Crear tablas básicas (user_profiles, workouts, body_measurements)
+- [ ] Configurar Row Level Security (RLS)
+- [ ] Implementar middleware de autenticación
+
+### Semana 2: Migración de Componentes Core
+**Objetivos:**
+- Migrar componentes existentes a Supabase
+- Implementar CRUD operations
+- Configurar React Query
+
+**Tareas:**
+- [ ] Migrar página de mediciones corporales a Supabase
+- [ ] Implementar React Query para cache y sincronización
+- [ ] Crear hooks personalizados para datos
+- [ ] Implementar validación con Zod
+- [ ] Migrar dashboard principal
+
+### Semana 3-4: Funcionalidades Avanzadas
+**Objetivos:**
+- Implementar todas las funcionalidades core
+- Optimizar rendimiento
+- Implementar Storage para fotos
+
+**Tareas:**
+- [ ] Implementar sistema de entrenamientos completo
+- [ ] Crear sistema de rutinas personalizadas
+- [ ] Configurar Supabase Storage para fotos
+- [ ] Implementar galería de progreso
+- [ ] Crear sistema de análisis y reportes
+- [ ] Optimizar queries y rendimiento
+
+### Semana 5: Implementación PWA
+**Objetivos:**
+- Convertir aplicación en PWA
+- Implementar funcionalidad offline
+- Configurar notificaciones
+
+**Tareas:**
+- [ ] Configurar Service Workers
+- [ ] Implementar manifest.json
+- [ ] Configurar cache strategies
+- [ ] Implementar sincronización offline
+- [ ] Configurar notificaciones push
+- [ ] Optimizar para instalación
+
+### Semana 6-7: Integraciones con Wearables
+**Objetivos:**
+- Implementar APIs de wearables
+- Crear Edge Functions
+- Implementar análisis con IA
+
+**Tareas:**
+- [ ] Crear Edge Functions para wearables
+- [ ] Implementar integración con Fitbit API
+- [ ] Implementar integración con Garmin API
+- [ ] Crear sistema de sincronización automática
+- [ ] Implementar análisis de datos con IA
+- [ ] Crear dashboard de insights
+
+### Semana 8: Deploy y Optimización
+**Objetivos:**
+- Migrar de Vercel a Netlify
+- Optimizar rendimiento
+- Testing y QA
+
+**Tareas:**
+- [ ] Configurar deploy en Netlify
+- [ ] Configurar CI/CD pipeline
+- [ ] Implementar Lighthouse optimizations
+- [ ] Configurar Web Vitals monitoring
+- [ ] Testing completo de funcionalidades
+- [ ] Migración de datos de producción
+- [ ] Go-live y monitoreo
+
+## 4. Configuración de Entorno
+
+### 4.1 Variables de Entorno Requeridas
+
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Wearable APIs
+FITBIT_CLIENT_ID=your_fitbit_client_id
+FITBIT_CLIENT_SECRET=your_fitbit_client_secret
+GARMIN_CLIENT_ID=your_garmin_client_id
+GARMIN_CLIENT_SECRET=your_garmin_client_secret
+
+# Netlify
+NETLIFY_SITE_ID=your_netlify_site_id
+NETLIFY_AUTH_TOKEN=your_netlify_token
+
+# Analytics
+NEXT_PUBLIC_GA_ID=your_google_analytics_id
+```
+
+### 4.2 Dependencias Nuevas
+
+```json
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "@tanstack/react-query": "^5.0.0",
+    "zod": "^3.22.0",
+    "chart.js": "^4.4.0",
+    "react-chartjs-2": "^5.2.0",
+    "workbox-webpack-plugin": "^7.0.0",
+    "next-pwa": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "lighthouse": "^11.0.0",
+    "web-vitals": "^3.5.0"
+  }
+}
+```
+
+## 5. Riesgos y Mitigaciones
+
+### 5.1 Riesgos Técnicos
+
+| Riesgo | Probabilidad | Impacto | Mitigación |
+|--------|--------------|---------|------------|
+| Pérdida de datos durante migración | Media | Alto | Backup completo antes de migración, testing en ambiente de desarrollo |
+| Problemas de rendimiento con Supabase | Baja | Medio | Optimización de queries, implementación de cache con React Query |
+| Incompatibilidad con APIs de wearables | Media | Medio | Implementación gradual, fallbacks para APIs no disponibles |
+| Problemas de deploy en Netlify | Baja | Medio | Testing previo, configuración de rollback automático |
+
+### 5.2 Plan de Rollback
+
+1. **Backup de datos:** Exportar todos los datos antes de la migración
+2. **Versión anterior:** Mantener versión actual disponible en branch separado
+3. **DNS switching:** Capacidad de revertir DNS en caso de problemas críticos
+4. **Monitoreo:** Alertas automáticas para detectar problemas post-deploy
+
+## 6. Criterios de Éxito
+
+### 6.1 Métricas Técnicas
+- [ ] Tiempo de carga < 3 segundos
+- [ ] Lighthouse Score > 90
+- [ ] PWA installable en todos los dispositivos
+- [ ] 99.9% uptime
+- [ ] Sincronización de datos < 5 segundos
+
+### 6.2 Métricas de Usuario
+- [ ] Migración de datos sin pérdida
+- [ ] Funcionalidad offline completa
+- [ ] Integración exitosa con al menos 2 wearables
+- [ ] Análisis de IA funcionando correctamente
+- [ ] Interfaz responsive en todos los dispositivos
 ```
 
 ## 3. Fases de Migración
